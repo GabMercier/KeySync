@@ -128,17 +128,19 @@ export default function DJHarmonicMatcher() {
   const [bpm, setBpm] = useState(120)
   const [matches, setMatches] = useState<MatchResult | null>(null)
   const [activeTab, setActiveTab] = useState("perfect")
-  const [isScrolled, setIsScrolled] = useState(false)
+  const [mobileScreen, setMobileScreen] = useState<"selection" | "results">("selection")
 
-  // Handle scroll for mobile wheel shrinking
+  // Check if mobile
+  const [isMobile, setIsMobile] = useState(false)
+
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY
-      setIsScrolled(scrollTop > 100)
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1600)
     }
 
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
   const shiftKey = (key: string, semitones: number): string => {
@@ -200,6 +202,21 @@ export default function DJHarmonicMatcher() {
         description: "Adjacent key (+1)",
       },
       {
+        key: `${keyNumber}${keyLetter === "A" ? "B" : "A"}`,
+        bpm_range: bpmRange(bpmValue),
+        type: "Same Root",
+        description: keyLetter === "A" ? "Same root note (minor to major)" : "Same root note (major to minor)",
+      },
+      {
+        key: keyLetter === "B" ? makeKey(keyNumber + 1, "A") : makeKey(keyNumber - 1, "B"),
+        bpm_range: bpmRange(bpmValue),
+        type: "Diagonal",
+        description: keyLetter === "B" ? "Diagonal mixing (B to A: +1)" : "Diagonal mixing (A to B: -1)",
+      },
+    ]
+
+    const advancedMatches = [
+      {
         key: makeKey(keyNumber - 7, keyLetter),
         bpm_range: bpmRange(bpmValue),
         type: "Perfect Fifth",
@@ -211,15 +228,6 @@ export default function DJHarmonicMatcher() {
         type: "Perfect Fifth",
         description: "Perfect fifth up",
       },
-    ]
-
-    const advancedMatches = [
-      {
-        key: `${keyNumber}${keyLetter === "A" ? "B" : "A"}`,
-        bpm_range: bpmRange(bpmValue),
-        type: "Same Root",
-        description: keyLetter === "A" ? "Same root note (minor to major)" : "Same root note (major to minor)",
-      },
       {
         key: makeKey(keyNumber + 4, keyLetter),
         bpm_range: bpmRange(bpmValue),
@@ -227,17 +235,28 @@ export default function DJHarmonicMatcher() {
         description: "Related key (+4)",
       },
       {
-        key: keyLetter === "B" ? makeKey(keyNumber + 1, "A") : makeKey(keyNumber - 1, "B"),
-        bpm_range: bpmRange(bpmValue),
-        type: "Diagonal",
-        description: keyLetter === "B" ? "Diagonal mixing (B to A: +1)" : "Diagonal mixing (A to B: -1)",
-      },
-      {
-        key: makeKey(keyNumber + 3, keyLetter === "A" ? "B" : "A"),
+        // Advanced harmonic mixing: A keys go +3 and switch to B, B keys go -3 and switch to A
+        key:
+          keyLetter === "A"
+            ? makeKey(keyNumber + 3, "B") // A keys: +3 and switch to B
+            : makeKey(keyNumber - 3, "A"), // B keys: -3 and switch to A
         bpm_range: bpmRange(bpmValue),
         type: "Advanced Mix",
         description: "Advanced harmonic mixing (+3 cross-mode)",
       },
+      {
+        key: makeKey(keyNumber - 2, keyLetter),
+        bpm_range: bpmRange(bpmValue),
+        type: "Energy Drop",
+        description: "Energy drop (-2 for energy drop)",
+      },
+    ]
+
+    // All compatible keys (perfect + good + advanced matches)
+    const allCompatibleKeys = [...perfectMatches, ...goodMatches, ...advancedMatches]
+
+    // Add energy boost matches only for pitch shifting (not in regular matches)
+    const energyBoostMatches = [
       {
         key: makeKey(keyNumber + 7, keyLetter),
         bpm_range: bpmRange(calculatePitchShift(bpmValue, 1)),
@@ -250,16 +269,10 @@ export default function DJHarmonicMatcher() {
         type: "Energy Boost",
         description: "Energy boost (+2 for 2 semitones)",
       },
-      {
-        key: makeKey(keyNumber - 2, keyLetter),
-        bpm_range: bpmRange(bpmValue),
-        type: "Energy Drop",
-        description: "Energy drop (-2 for energy drop)",
-      },
     ]
 
-    // All compatible keys (perfect + good matches)
-    const allCompatibleKeys = [...perfectMatches, ...goodMatches, ...advancedMatches]
+    // All compatible keys including energy boosts for pitch calculations
+    const allCompatibleKeysWithEnergyBoost = [...allCompatibleKeys, ...energyBoostMatches]
 
     // Generate pitch up choices - keys that when pitched up become compatible
     const pitchUpChoicesMap = new Map<
@@ -267,7 +280,7 @@ export default function DJHarmonicMatcher() {
       { original_key: string; bpm: number; becomes_key: string; match_types: string[] }
     >()
 
-    allCompatibleKeys.forEach((match) => {
+    allCompatibleKeysWithEnergyBoost.forEach((match) => {
       const originalKey = shiftKey(match.key, -1)
       const bpm = calculatePitchShift(bpmValue, -1)
       const key = `${originalKey}-${match.key}`
@@ -295,7 +308,7 @@ export default function DJHarmonicMatcher() {
       { original_key: string; bpm: number; becomes_key: string; match_types: string[] }
     >()
 
-    allCompatibleKeys.forEach((match) => {
+    allCompatibleKeysWithEnergyBoost.forEach((match) => {
       const originalKey = shiftKey(match.key, 1)
       const bpm = calculatePitchShift(bpmValue, 1)
       const key = `${originalKey}-${match.key}`
@@ -338,6 +351,10 @@ export default function DJHarmonicMatcher() {
     if (key && bpm) {
       const result = generateMatches(key, bpm)
       setMatches(result)
+      // Auto-navigate to results on mobile when a key is selected
+      if (isMobile) {
+        setMobileScreen("results")
+      }
     }
   }
 
@@ -358,21 +375,42 @@ export default function DJHarmonicMatcher() {
     setSelectedKey("")
     setBpm(120)
     setMatches(null)
+    if (isMobile) {
+      setMobileScreen("selection")
+    }
   }
 
   const createKeyButtons = (keys: string[], radius: number) => {
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768
-    const scaleFactor = isMobile && isScrolled ? 0.7 : 1
-    const adjustedRadius = radius * scaleFactor
-
     return keys.map((key, index) => {
       const angle = (index / keys.length) * 360 - 90
       const rad = angle * (Math.PI / 180)
-      const x = adjustedRadius * Math.cos(rad)
-      const y = adjustedRadius * Math.sin(rad)
+      const x = radius * Math.cos(rad)
+      const y = radius * Math.sin(rad)
       const isSelected = selectedKey === key
       const data = wheelData[key as keyof typeof wheelData]
-      const buttonSize = isMobile && isScrolled ? "w-12 h-12" : "w-16 h-16"
+
+      // Calculate button size based on screen size and prevent overlap
+      // For very small screens (375px), ensure good touch targets
+      // For very large screens, make buttons bigger with proper proportions
+      const getButtonSize = () => {
+        const screenWidth = window.innerWidth
+
+        if (screenWidth <= 375) {
+          // Very small screens - ensure minimum viable size
+          return Math.min(screenWidth * 0.08, 35)
+        } else if (screenWidth >= 1920) {
+          // Very large screens - bigger buttons
+          return Math.min(screenWidth * 0.035, 65)
+        } else if (isMobile) {
+          // Regular mobile screens
+          return Math.min(screenWidth * 0.09, 50)
+        } else {
+          // Desktop screens
+          return Math.min(screenWidth * 0.03, 45)
+        }
+      }
+
+      const buttonSize = getButtonSize()
 
       return (
         <Button
@@ -386,313 +424,368 @@ export default function DJHarmonicMatcher() {
             backgroundColor: isSelected ? data.color : `${data.color}60`,
             boxShadow: isSelected ? `0 0 15px ${data.color}60` : undefined,
             zIndex: isSelected ? 10 : 1,
+            width: `${buttonSize}px`,
+            height: `${buttonSize}px`,
           }}
-          className={`rounded-full ${buttonSize} text-xs font-bold border-2 transition-all duration-200 ${
+          className={`rounded-full text-xs font-bold border-2 transition-all duration-200 ${
             isSelected
               ? "border-white text-white scale-110 shadow-lg"
               : "border-white/30 text-white hover:border-white/60 hover:scale-105 hover:shadow-md"
           }`}
         >
           <div className="flex flex-col items-center justify-center">
-            <span className={`font-bold ${isMobile && isScrolled ? "text-xs" : "text-sm"}`}>{key}</span>
-            <span className={`opacity-70 ${isMobile && isScrolled ? "text-[8px]" : "text-[10px]"}`}>
-              {data.musicalKey}
-            </span>
+            <span className="font-bold text-xs">{key}</span>
+            <span className="opacity-70 text-[8px]">{data.musicalKey}</span>
           </div>
         </Button>
       )
     })
   }
 
-  const renderMatchList = (matches: any[], colorClass: string) => (
-    <div className="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto">
-      {matches.map((match, index) => (
-        <div key={index} className="flex flex-wrap items-center gap-2 p-2 bg-white/5 rounded">
-          <Badge
-            className="text-white border-0"
-            style={{
-              backgroundColor: wheelData[match.key as keyof typeof wheelData]?.color,
-              color: getContrastColor(wheelData[match.key as keyof typeof wheelData]?.color || "#000000"),
-            }}
-          >
-            {match.key}
-          </Badge>
-          <span className="text-white text-sm">
-            {match.bpm_range[0]} - {match.bpm_range[1]} BPM
-          </span>
-          <span className="text-gray-300 text-xs">• {match.description}</span>
-        </div>
-      ))}
-    </div>
-  )
+  const renderMatchList = (matches: any[], colorClass: string) => {
+    const bpmRange = matches.length > 0 ? matches[0].bpm_range : null
 
-  const renderPitchChoices = (choices: any[], colorClass: string, direction: string) => (
-    <div className="space-y-3 h-full flex flex-col">
-      <p className="text-gray-300 text-sm">
-        Find songs in these keys and pitch them {direction} ({direction === "UP" ? "+5.95%" : "-5.95%"}) to match:
-      </p>
-      <div className="grid grid-cols-1 gap-2 flex-1 overflow-y-auto">
-        {choices.map((choice, index) => (
-          <div key={index} className="flex flex-wrap items-center gap-2 p-2 bg-white/5 rounded">
-            <Badge
-              className="text-white border-0"
-              style={{
-                backgroundColor: wheelData[choice.original_key as keyof typeof wheelData]?.color,
-                color: getContrastColor(wheelData[choice.original_key as keyof typeof wheelData]?.color || "#000000"),
-              }}
-            >
-              {choice.original_key}
-            </Badge>
-            <span className="text-white text-sm">at {choice.bpm} BPM</span>
-            <span className="text-gray-300 text-xs">→ becomes</span>
-            <Badge
-              className="text-white border-0"
-              style={{
-                backgroundColor: wheelData[choice.becomes_key as keyof typeof wheelData]?.color,
-                color: getContrastColor(wheelData[choice.becomes_key as keyof typeof wheelData]?.color || "#000000"),
-              }}
-            >
-              {choice.becomes_key}
-            </Badge>
-            <span className="text-gray-300 text-xs">({choice.match_type})</span>
+    return (
+      <div className="h-full flex flex-col">
+        {bpmRange && (
+          <div className="text-center flex-shrink-0 mb-3">
+            <p className="text-white text-lg font-semibold">
+              {bpmRange[0]} - {bpmRange[1]} BPM
+            </p>
           </div>
-        ))}
+        )}
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-2">
+            {matches.map((match, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-2 p-2 bg-white/5 rounded">
+                <Badge
+                  className="text-white border-0"
+                  style={{
+                    backgroundColor: wheelData[match.key as keyof typeof wheelData]?.color,
+                    color: getContrastColor(wheelData[match.key as keyof typeof wheelData]?.color || "#000000"),
+                  }}
+                >
+                  {match.key}
+                </Badge>
+                <span className="text-gray-300 text-xs">• {match.description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  const renderPitchChoices = (choices: any[], colorClass: string, direction: string) => {
+    // Get the first choice to show the tempo conversion
+    const firstChoice = choices[0]
+    const tempoConversion = firstChoice ? `${firstChoice.bpm} → ${bpm}` : ""
+
+    return (
+      <div className="h-full flex flex-col">
+        <div className="text-center flex-shrink-0 mb-3">
+          <p className="text-white text-lg font-semibold">{tempoConversion}</p>
+          <p className="text-gray-300 text-xs">
+            Find songs in these keys and pitch them {direction} ({direction === "UP" ? "+5.95%" : "-5.95%"}) to match:
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-2">
+            {choices.map((choice, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-2 p-2 bg-white/5 rounded">
+                <Badge
+                  className="text-white border-0"
+                  style={{
+                    backgroundColor: wheelData[choice.original_key as keyof typeof wheelData]?.color,
+                    color: getContrastColor(
+                      wheelData[choice.original_key as keyof typeof wheelData]?.color || "#000000",
+                    ),
+                  }}
+                >
+                  {choice.original_key}
+                </Badge>
+                <span className="text-gray-300 text-xs">→</span>
+                <Badge
+                  className="text-white border-0"
+                  style={{
+                    backgroundColor: wheelData[choice.becomes_key as keyof typeof wheelData]?.color,
+                    color: getContrastColor(
+                      wheelData[choice.becomes_key as keyof typeof wheelData]?.color || "#000000",
+                    ),
+                  }}
+                >
+                  {choice.becomes_key}
+                </Badge>
+                <span className="text-gray-300 text-xs">({choice.match_type})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleSliderDoubleClick = () => {
     handleBpmChange(120)
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Music className="w-8 h-8 text-white" />
-            <h1 className="text-3xl font-bold text-white">Key Sync</h1>
-          </div>
-          <p className="text-gray-300">Interactive Camelot wheel for harmonic mixing</p>
-        </div>
+  const SelectionScreen = () => (
+    <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
+      <CardHeader className="pb-4 flex-shrink-0">
+        <CardTitle className="text-white text-base">Select Key & BPM</CardTitle>
+        <CardDescription className="text-gray-300 text-xs">
+          Click on any key button to select it, adjust BPM in the center
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-4">
+        <div className="w-full h-full flex items-center justify-center">
+          <div
+            className="relative flex items-center justify-center"
+            style={{
+              width: isMobile ? "min(85vw, 85vh, 350px)" : "min(60vw, 60vh, 600px)",
+              height: isMobile ? "min(85vw, 85vh, 350px)" : "min(60vw, 60vh, 600px)",
+            }}
+          >
+            {/* Major keys outer ring */}
+            {createKeyButtons(camelotKeysMajor, getRadius(true))}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Interactive Camelot Wheel */}
-          <Card className="bg-white/5 backdrop-blur-sm border-white/10">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-white text-base">Select Key & BPM</CardTitle>
-              <CardDescription className="text-gray-300 text-xs">
-                Click on any key button to select it, adjust BPM in the center
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
+            {/* Minor keys inner ring */}
+            {createKeyButtons(camelotKeysMinor, getRadius(false))}
+
+            {/* BPM selector at center */}
+            <div className="absolute inset-0 flex items-center justify-center">
               <div
-                className={`relative mx-auto transition-all duration-300 ${
-                  isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "my-4" : "my-8"
-                }`}
+                className="bg-gray-900/95 rounded-full border-2 border-white/20 p-3"
                 style={{
-                  width: isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "320px" : "450px",
-                  height: isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "320px" : "450px",
+                  width: isMobile ? `min(22vw, 22vh, 120px)` : `min(15vw, 15vh, 140px)`,
+                  height: isMobile ? `min(22vw, 22vh, 120px)` : `min(15vw, 15vh, 140px)`,
                 }}
               >
-                {/* Major keys outer ring */}
-                {createKeyButtons(camelotKeysMajor, 190)}
-
-                {/* Minor keys inner ring */}
-                {createKeyButtons(camelotKeysMinor, 120)}
-
-                {/* BPM selector at center */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div
-                    className={`bg-gray-900/95 rounded-full border-2 border-white/20 p-4 transition-all duration-300 ${
-                      isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "w-24 h-24" : "w-32 h-32"
-                    }`}
-                  >
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="flex items-center gap-1 mb-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => adjustBpm(-1)}
-                          className={`text-white hover:bg-white/10 ${
-                            isScrolled && typeof window !== "undefined" && window.innerWidth < 768
-                              ? "w-4 h-4"
-                              : "w-6 h-6"
-                          }`}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span
-                          className={`text-white font-bold tabular-nums ${
-                            isScrolled && typeof window !== "undefined" && window.innerWidth < 768
-                              ? "text-lg"
-                              : "text-2xl"
-                          }`}
-                        >
-                          {bpm}
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => adjustBpm(1)}
-                          className={`text-white hover:bg-white/10 ${
-                            isScrolled && typeof window !== "undefined" && window.innerWidth < 768
-                              ? "w-4 h-4"
-                              : "w-6 h-6"
-                          }`}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div
-                        className={`w-full px-1 ${
-                          isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "mb-1" : "mb-2"
-                        }`}
-                        onDoubleClick={handleSliderDoubleClick}
-                      >
-                        <Slider
-                          value={[bpm]}
-                          onValueChange={(value) => handleBpmChange(value[0])}
-                          max={200}
-                          min={60}
-                          step={1}
-                          className="w-full"
-                        />
-                      </div>
-                      <span
-                        className={`text-white/70 font-medium ${
-                          isScrolled && typeof window !== "undefined" && window.innerWidth < 768 ? "text-xs" : "text-sm"
-                        }`}
-                      >
-                        BPM
-                      </span>
-                    </div>
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => adjustBpm(-1)}
+                      className="text-white hover:bg-white/10 w-5 h-5"
+                    >
+                      <Minus className="w-2 h-2" />
+                    </Button>
+                    <span className="text-white font-bold tabular-nums text-xl">{bpm}</span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => adjustBpm(1)}
+                      className="text-white hover:bg-white/10 w-5 h-5"
+                    >
+                      <Plus className="w-2 h-2" />
+                    </Button>
                   </div>
+                  <div className="w-full px-1 mb-1" onDoubleClick={handleSliderDoubleClick}>
+                    <Slider
+                      value={[bpm]}
+                      onValueChange={(value) => handleBpmChange(value[0])}
+                      max={200}
+                      min={60}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                  <span className="text-white/70 font-medium text-xs">BPM</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {selectedKey && (
+          <div
+            className="p-3 rounded-lg border mb-4 w-full bg-white/5 flex-shrink-0"
+            style={{
+              borderColor: `${wheelData[selectedKey as keyof typeof wheelData]?.color}40`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Music className="w-4 h-4" style={{ color: wheelData[selectedKey as keyof typeof wheelData]?.color }} />
+                <span className="text-white font-semibold">Original Key</span>
+              </div>
+              <Button onClick={reset} size="icon" variant="ghost" className="text-white hover:bg-white/10 w-8 h-8">
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                className="text-white border-0"
+                style={{
+                  backgroundColor: wheelData[selectedKey as keyof typeof wheelData]?.color,
+                  color: getContrastColor(wheelData[selectedKey as keyof typeof wheelData]?.color || "#000000"),
+                }}
+              >
+                {selectedKey}
+              </Badge>
+              <span className="text-white text-sm">
+                {matches?.original.bpm_range[0]} - {matches?.original.bpm_range[1]} BPM
+              </span>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+
+  const ResultsScreen = () => (
+    <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
+      <CardHeader className="pb-4 flex-shrink-0">
+        <CardTitle className="text-white">Harmonic Matches</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 min-h-0 p-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
+          <TabsList className="grid w-full grid-cols-5 bg-white/10 flex-shrink-0">
+            <TabsTrigger value="perfect" className="text-xs data-[state=active]:bg-white/20 text-white">
+              Perfect
+            </TabsTrigger>
+            <TabsTrigger value="good" className="text-xs data-[state=active]:bg-white/20 text-white">
+              Good
+            </TabsTrigger>
+            <TabsTrigger value="advanced" className="text-xs data-[state=active]:bg-white/20 text-white">
+              Advanced
+            </TabsTrigger>
+            <TabsTrigger value="pitch-up" className="text-xs data-[state=active]:bg-white/20 text-white">
+              <ArrowUp className="w-3 h-3" />
+            </TabsTrigger>
+            <TabsTrigger value="pitch-down" className="text-xs data-[state=active]:bg-white/20 text-white">
+              <ArrowDown className="w-3 h-3" />
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex-1 mt-4 min-h-0">
+            <TabsContent value="perfect" className="h-full m-0 data-[state=inactive]:hidden">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                  <span className="text-white font-semibold">Perfect Matches</span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {matches && renderMatchList(matches.perfect_matches, "text-gray-300")}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="good" className="h-full m-0 data-[state=inactive]:hidden">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                  <span className="text-white font-semibold">Good Matches</span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {matches && renderMatchList(matches.good_matches, "text-gray-300")}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="advanced" className="h-full m-0 data-[state=inactive]:hidden">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
+                  <span className="text-white font-semibold">Advanced Matches</span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {matches && renderMatchList(matches.advanced_matches, "text-gray-300")}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pitch-up" className="h-full m-0 data-[state=inactive]:hidden">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                  <ArrowUp className="w-4 h-4 text-orange-400" />
+                  <span className="text-white font-semibold">Pitch UP Options</span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {matches && renderPitchChoices(matches.pitch_up_choices, "text-gray-300", "UP")}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pitch-down" className="h-full m-0 data-[state=inactive]:hidden">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                  <ArrowDown className="w-4 h-4 text-blue-400" />
+                  <span className="text-white font-semibold">Pitch DOWN Options</span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {matches && renderPitchChoices(matches.pitch_down_choices, "text-gray-300", "DOWN")}
+                </div>
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+      </CardContent>
+    </Card>
+  )
+
+  // Calculate radius with better proportions for large screens
+  const getRadius = (isOuter: boolean) => {
+    const containerSize = isMobile
+      ? Math.min(window.innerWidth * 0.85, window.innerHeight * 0.85, 350)
+      : Math.min(window.innerWidth * 0.6, window.innerHeight * 0.6, 600)
+
+    if (window.innerWidth >= 1920) {
+      // Very large screens - bigger difference between outer and inner
+      return containerSize * (isOuter ? 0.45 : 0.25)
+    } else {
+      // Regular screens
+      return containerSize * (isOuter ? 0.42 : 0.27)
+    }
+  }
+
+  return (
+    <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden flex flex-col">
+      <div className="max-w-7xl mx-auto h-full flex flex-col px-2 py-4">
+        {/* Title in top left corner */}
+        <div className="absolute top-4 left-4 z-10">
+          <div className="flex items-center gap-2"></div>
+        </div>
+
+        <div className="max-w-7xl mx-auto h-full flex flex-col pt-[10] pb-2.5">
+          {/* Desktop Layout */}
+          {!isMobile && (
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 h-full min-h-0 py-4 px-4">
+              {SelectionScreen()}
+              {matches && ResultsScreen()}
+            </div>
+          )}
+
+          {/* Mobile Layout */}
+          {isMobile && (
+            <div className="h-full flex flex-col min-h-0">
+              {/* Mobile Navigation */}
+              <div className="flex justify-center mb-4 flex-shrink-0">
+                <div className="flex bg-white/10 rounded-lg p-1">
+                  <Button
+                    variant={mobileScreen === "selection" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setMobileScreen("selection")}
+                  >
+                    Selection
+                  </Button>
+                  <Button
+                    variant={mobileScreen === "results" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setMobileScreen("results")}
+                  >
+                    Results
+                  </Button>
                 </div>
               </div>
 
-              {selectedKey && (
-                <div
-                  className="p-3 rounded-lg border mb-4 w-full bg-white/5"
-                  style={{
-                    borderColor: `${wheelData[selectedKey as keyof typeof wheelData]?.color}40`,
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Music
-                      className="w-4 h-4"
-                      style={{ color: wheelData[selectedKey as keyof typeof wheelData]?.color }}
-                    />
-                    <span className="text-white font-semibold">Original Key</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      className="text-white border-0"
-                      style={{
-                        backgroundColor: wheelData[selectedKey as keyof typeof wheelData]?.color,
-                        color: getContrastColor(wheelData[selectedKey as keyof typeof wheelData]?.color || "#000000"),
-                      }}
-                    >
-                      {selectedKey}
-                    </Badge>
-                    <span className="text-white text-sm">
-                      {matches?.original.bpm_range[0]} - {matches?.original.bpm_range[1]} BPM
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <Button
-                onClick={reset}
-                variant="outline"
-                className="bg-white/5 border-white/20 text-white hover:bg-white/10"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Results Panel with Tabs */}
-          {matches && (
-            <Card className="bg-white/5 backdrop-blur-sm border-white/10">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-white">Harmonic Matches</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-5 bg-white/10">
-                    <TabsTrigger value="perfect" className="text-xs data-[state=active]:bg-white/20 text-white">
-                      Perfect
-                    </TabsTrigger>
-                    <TabsTrigger value="good" className="text-xs data-[state=active]:bg-white/20 text-white">
-                      Good
-                    </TabsTrigger>
-                    <TabsTrigger value="advanced" className="text-xs data-[state=active]:bg-white/20 text-white">
-                      Advanced
-                    </TabsTrigger>
-                    <TabsTrigger value="pitch-up" className="text-xs data-[state=active]:bg-white/20 text-white">
-                      <ArrowUp className="w-3 h-3" />
-                    </TabsTrigger>
-                    <TabsTrigger value="pitch-down" className="text-xs data-[state=active]:bg-white/20 text-white">
-                      <ArrowDown className="w-3 h-3" />
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="perfect" className="mt-4">
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                        <span className="text-white font-semibold">Perfect Matches</span>
-                      </div>
-                      {renderMatchList(matches.perfect_matches, "text-gray-300")}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="good" className="mt-4">
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                        <span className="text-white font-semibold">Good Matches</span>
-                      </div>
-                      {renderMatchList(matches.good_matches, "text-gray-300")}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="advanced" className="mt-4">
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
-                        <span className="text-white font-semibold">Advanced Matches</span>
-                      </div>
-                      {renderMatchList(matches.advanced_matches, "text-gray-300")}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="pitch-up" className="mt-4">
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <ArrowUp className="w-4 h-4 text-blue-400" />
-                        <span className="text-white font-semibold">Pitch UP Options</span>
-                      </div>
-                      {renderPitchChoices(matches.pitch_up_choices, "text-gray-300", "UP")}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="pitch-down" className="mt-4 h-full">
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
-                      <div className="flex items-center gap-2 mb-3">
-                        <ArrowDown className="w-4 h-4 text-orange-400" />
-                        <span className="text-white font-semibold">Pitch DOWN Options</span>
-                      </div>
-                      <div className="flex-1 overflow-hidden">
-                        {renderPitchChoices(matches.pitch_down_choices, "text-gray-300", "DOWN")}
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+              {/* Mobile Content */}
+              <div className="flex-1 min-h-0">
+                {mobileScreen === "selection" && SelectionScreen()}
+                {mobileScreen === "results" && matches && ResultsScreen()}
+              </div>
+            </div>
           )}
         </div>
       </div>
