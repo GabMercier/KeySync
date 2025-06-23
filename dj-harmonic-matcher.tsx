@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
-import { Music, ArrowUp, ArrowDown, RotateCcw, Minus, Plus } from "lucide-react"
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, ChevronUp, ChevronDown } from "lucide-react"
 
 const camelotKeysMinor = ["12A", "1A", "2A", "3A", "4A", "5A", "6A", "7A", "8A", "9A", "10A", "11A"]
 
@@ -132,6 +132,7 @@ export default function DJHarmonicMatcher() {
   const [matches, setMatches] = useState<MatchResult | null>(null)
   const [activeTab, setActiveTab] = useState("perfect")
   const [mobileScreen, setMobileScreen] = useState<"selection" | "results">("selection")
+  const [showControls, setShowControls] = useState(false)
 
   // Check if mobile
   const [isMobile, setIsMobile] = useState(false)
@@ -598,50 +599,153 @@ export default function DJHarmonicMatcher() {
             </div>
           </div>
         </div>
-
-        {selectedKey && (
-          <div
-            className="p-3 rounded-lg border mb-4 w-full bg-white/5 flex-shrink-0"
-            style={{
-              borderColor: `${wheelData[selectedKey as keyof typeof wheelData]?.color}40`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Music className="w-4 h-4" style={{ color: wheelData[selectedKey as keyof typeof wheelData]?.color }} />
-                <span className="text-white font-semibold">Original Key</span>
-              </div>
-              <Button onClick={reset} size="icon" variant="ghost" className="text-white hover:bg-white/10 w-8 h-8">
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className="text-white border-0"
-                style={{
-                  backgroundColor: wheelData[selectedKey as keyof typeof wheelData]?.color,
-                  color: getContrastColor(wheelData[selectedKey as keyof typeof wheelData]?.color || "#000000"),
-                }}
-              >
-                {selectedKey}
-              </Badge>
-              <span className="text-white text-sm">
-                {matches?.original.bpm_range[0]} - {matches?.original.bpm_range[1]} BPM
-              </span>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   )
 
   const ResultsScreen = () => (
     <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
-      <CardHeader className="pb-4 flex-shrink-0">
-        <CardTitle className="text-white">Harmonic Matches</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
+      <CardContent className="flex-1 min-h-0 p-6 flex flex-col">
+        {/* Controls Header */}
+        {selectedKey && (
+          <div className="mb-4 flex-shrink-0">
+            <div className="bg-white/5 rounded-lg border border-white/10">
+              <div
+                className="flex items-center p-2 cursor-pointer hover:bg-white/5 transition-colors justify-end gap-x-[250px] px-2 py-1"
+                onClick={() => setShowControls(!showControls)}
+              >
+                {!showControls && (
+                  <div className="flex items-center gap-3">
+                    <Badge
+                      className="text-white border-0"
+                      style={{
+                        backgroundColor: wheelData[selectedKey as keyof typeof wheelData]?.color,
+                        color: getContrastColor(wheelData[selectedKey as keyof typeof wheelData]?.color || "#000000"),
+                      }}
+                    >
+                      {selectedKey}
+                    </Badge>
+                    <span className="text-white text-sm font-medium">{bpm} BPM</span>
+                  </div>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-white hover:bg-white/10 w-5 h-5 pointer-events-none"
+                >
+                  {showControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </Button>
+              </div>
+              {showControls && (
+                <div className="p-4 flex justify-center pr-1 pl-1 pb-1 pt-2">
+                  <div className="flex items-center gap-6 py-0">
+                    {/* Key Controls */}
+                    <div className="flex flex-col items-center">
+                      {/* Up Arrow */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          const keyNumber = Number.parseInt(selectedKey.slice(0, -1))
+                          const keyLetter = selectedKey.slice(-1)
+                          const newKey = `${keyNumber}${keyLetter === "A" ? "B" : "A"}`
+                          handleKeySelect(newKey)
+                        }}
+                        className="text-white hover:bg-white/10 w-5 h-5"
+                      >
+                        <ArrowUp className="w-2 h-2" />
+                      </Button>
+
+                      {/* Horizontal Key Controls */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            const keyNumber = Number.parseInt(selectedKey.slice(0, -1))
+                            const keyLetter = selectedKey.slice(-1)
+                            const newKeyNumber = keyNumber === 1 ? 12 : keyNumber - 1
+                            const newKey = `${newKeyNumber}${keyLetter}`
+                            handleKeySelect(newKey)
+                          }}
+                          className="text-white hover:bg-white/10 w-5 h-5"
+                        >
+                          <ArrowLeft className="w-2 h-2" />
+                        </Button>
+
+                        <Badge
+                          className="text-white border-0 mx-1"
+                          style={{
+                            backgroundColor: wheelData[selectedKey as keyof typeof wheelData]?.color,
+                            color: getContrastColor(
+                              wheelData[selectedKey as keyof typeof wheelData]?.color || "#000000",
+                            ),
+                          }}
+                        >
+                          {selectedKey}
+                        </Badge>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            const keyNumber = Number.parseInt(selectedKey.slice(0, -1))
+                            const keyLetter = selectedKey.slice(-1)
+                            const newKeyNumber = keyNumber === 12 ? 1 : keyNumber + 1
+                            const newKey = `${newKeyNumber}${keyLetter}`
+                            handleKeySelect(newKey)
+                          }}
+                          className="text-white hover:bg-white/10 w-5 h-5"
+                        >
+                          <ArrowRight className="w-2 h-2" />
+                        </Button>
+                      </div>
+
+                      {/* Down Arrow */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          const keyNumber = Number.parseInt(selectedKey.slice(0, -1))
+                          const keyLetter = selectedKey.slice(-1)
+                          const newKey = `${keyNumber}${keyLetter === "A" ? "B" : "A"}`
+                          handleKeySelect(newKey)
+                        }}
+                        className="text-white hover:bg-white/10 w-5 h-5"
+                      >
+                        <ArrowDown className="w-2 h-2" />
+                      </Button>
+                    </div>
+
+                    {/* BPM Controls */}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => adjustBpm(-1)}
+                        className="text-white hover:bg-white/10 w-6 h-6"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <div className="text-white font-bold text-sm px-2">{bpm}</div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => adjustBpm(1)}
+                        className="text-white hover:bg-white/10 w-6 h-6"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs Section */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-5 bg-white/10 flex-shrink-0">
             <TabsTrigger value="perfect" className="text-xs data-[state=active]:bg-white/20 text-white">
               Perfect
