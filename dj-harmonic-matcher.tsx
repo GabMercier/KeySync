@@ -66,6 +66,9 @@ const wheelData = {
   "11A": { color: "#4A7A8A", musicalKey: "F#", type: "minor" },
 }
 
+// Utility to detect browser-only APIs safely
+const isBrowser = typeof window !== "undefined"
+
 const getContrastColor = (hexColor: string): string => {
   // Convert hex to RGB
   const r = Number.parseInt(hexColor.slice(1, 3), 16)
@@ -393,20 +396,18 @@ export default function DJHarmonicMatcher() {
       // For very small screens (375px), ensure good touch targets
       // For very large screens, make buttons bigger with proper proportions
       const getButtonSize = () => {
+        if (!isBrowser) return 45 // fallback when rendering on the server
         const screenWidth = window.innerWidth
 
         if (screenWidth <= 375) {
-          // Very small screens - ensure minimum viable size
           return Math.min(screenWidth * 0.08, 35)
         } else if (screenWidth >= 1920) {
-          // Very large screens - bigger buttons
           return Math.min(screenWidth * 0.035, 65)
         } else if (isMobile) {
-          // Regular mobile screens
           return Math.min(screenWidth * 0.09, 50)
         } else {
-          // Desktop screens
-          return Math.min(screenWidth * 0.03, 45)
+          const isOuterCircle = keys === camelotKeysMajor
+          return isOuterCircle ? Math.min(screenWidth * 0.04, 55) : Math.min(screenWidth * 0.03, 45)
         }
       }
 
@@ -727,17 +728,18 @@ export default function DJHarmonicMatcher() {
 
   // Calculate radius with better proportions for large screens
   const getRadius = (isOuter: boolean) => {
-    const containerSize = isMobile
-      ? Math.min(window.innerWidth * 0.85, window.innerHeight * 0.85, 350)
-      : Math.min(window.innerWidth * 0.6, window.innerHeight * 0.6, 600)
+    // Provide safe defaults during static prerender
+    const width = isBrowser ? window.innerWidth : 1280
+    const height = isBrowser ? window.innerHeight : 720
 
-    if (window.innerWidth >= 1920) {
-      // Very large screens - bigger difference between outer and inner
+    const containerSize = isMobile
+      ? Math.min(width * 0.85, height * 0.85, 350)
+      : Math.min(width * 0.6, height * 0.6, 600)
+
+    if (width >= 1920) {
       return containerSize * (isOuter ? 0.45 : 0.25)
-    } else {
-      // Regular screens
-      return containerSize * (isOuter ? 0.42 : 0.27)
     }
+    return containerSize * (isOuter ? 0.42 : 0.27)
   }
 
   return (
