@@ -557,13 +557,13 @@ export default function DJHarmonicMatcher() {
             {/* BPM selector at center */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div
-                className="bg-gray-900/95 rounded-full border-2 border-white/20 p-3"
+                className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none"
                 style={{
-                  width: isMobile ? `min(22vw, 22vh, 120px)` : `min(15vw, 15vh, 140px)`,
-                  height: isMobile ? `min(22vw, 22vh, 120px)` : `min(15vw, 15vh, 140px)`,
+                  width: "140px",
+                  height: "140px",
                 }}
               >
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center justify-center h-full px-0 py-0">
                   <div className="flex items-center gap-1 mb-1">
                     <Button
                       size="icon"
@@ -848,7 +848,7 @@ export default function DJHarmonicMatcher() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden flex flex-col">
-      <div className="max-w-7xl mx-auto h-full flex flex-col px-2 py-4">
+      <div className="max-w-7xl mx-auto h-full flex flex-col py-4 px-1">
         {/* Title in top left corner */}
         <div className="absolute top-4 left-4 z-10">
           <div className="flex items-center gap-2"></div>
