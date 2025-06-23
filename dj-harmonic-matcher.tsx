@@ -766,8 +766,8 @@ export default function DJHarmonicMatcher() {
 
           <div className="flex-1 mt-4 min-h-0">
             <TabsContent value="perfect" className="h-full m-0 data-[state=inactive]:hidden">
-              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col">
-                <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+              <div className="bg-white/5 p-4 rounded-lg border border-white/10 h-full flex flex-col px-1">
+                <div className="flex items-center gap-2 mb-3 flex-shrink-0 px-2">
                   <div className="w-3 h-3 bg-green-400 rounded-full"></div>
                   <span className="text-white font-semibold">Perfect Matches</span>
                 </div>
@@ -848,7 +848,7 @@ export default function DJHarmonicMatcher() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden flex flex-col">
-      <div className="max-w-7xl mx-auto h-full flex flex-col py-4 px-1">
+      <div className="max-w-7xl mx-auto h-full flex flex-col py-4 px-0">
         {/* Title in top left corner */}
         <div className="absolute top-4 left-4 z-10">
           <div className="flex items-center gap-2"></div>
