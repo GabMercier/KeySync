@@ -606,8 +606,8 @@ export default function DJHarmonicMatcher() {
   const ResultsScreen = () => (
     <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
       <CardContent className="flex-1 min-h-0 p-6 flex flex-col">
-        {/* Controls Header */}
-        {selectedKey && (
+        {/* Controls Header - Only show in mobile mode */}
+        {selectedKey && isMobile && (
           <div className="mb-4 flex-shrink-0">
             <div className="bg-white/5 rounded-lg border border-white/10">
               <div
