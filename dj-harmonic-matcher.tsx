@@ -384,62 +384,112 @@ export default function DJHarmonicMatcher() {
     }
   }
 
-  const createKeyButtons = (keys: string[], radius: number) => {
+  // Calculate radius with much larger proportions to fill available space
+  const getRadius = (ringType: "bmp" | "inner" | "outer") => {
+    const bmpRadius = 70 // BMP selector is 140px diameter = 70px radius
+    const ringThickness = isMobile ? 125 : 80 // Much thicker rings for mobile (increased from 100 to 125)
+    const gap = 10 // Small gap between rings
+
+    switch (ringType) {
+      case "bmp":
+        return bmpRadius
+      case "inner":
+        // Inner ring starts just outside BMP selector
+        return bmpRadius + gap
+      case "outer":
+        // Outer ring starts after inner ring
+        return bmpRadius + gap + ringThickness + gap
+      default:
+        return bmpRadius
+    }
+  }
+
+  const createWedgePaths = (keys: string[], innerRadius: number, outerRadius: number) => {
+    const wedgeAngle = 360 / keys.length // 30 degrees per wedge
+
     return keys.map((key, index) => {
-      const angle = (index / keys.length) * 360 - 90
-      const rad = angle * (Math.PI / 180)
-      const x = radius * Math.cos(rad)
-      const y = radius * Math.sin(rad)
+      const startAngle = index * wedgeAngle - 90 // Start from top (-90 degrees)
+      const endAngle = startAngle + wedgeAngle
+
+      // Convert to radians
+      const startRad = (startAngle * Math.PI) / 180
+      const endRad = (endAngle * Math.PI) / 180
+
+      // Calculate coordinates
+      const x1 = innerRadius * Math.cos(startRad)
+      const y1 = innerRadius * Math.sin(startRad)
+      const x2 = outerRadius * Math.cos(startRad)
+      const y2 = outerRadius * Math.sin(startRad)
+      const x3 = outerRadius * Math.cos(endRad)
+      const y3 = outerRadius * Math.sin(endRad)
+      const x4 = innerRadius * Math.cos(endRad)
+      const y4 = innerRadius * Math.sin(endRad)
+
+      // Create SVG path for the wedge
+      const pathData = [
+        `M ${x1} ${y1}`, // Move to inner start
+        `L ${x2} ${y2}`, // Line to outer start
+        `A ${outerRadius} ${outerRadius} 0 0 1 ${x3} ${y3}`, // Arc along outer edge
+        `L ${x4} ${y4}`, // Line to inner end
+        `A ${innerRadius} ${innerRadius} 0 0 0 ${x1} ${y1}`, // Arc along inner edge back to start
+        "Z", // Close path
+      ].join(" ")
+
       const isSelected = selectedKey === key
       const data = wheelData[key as keyof typeof wheelData]
 
-      // Calculate button size based on screen size and prevent overlap
-      // For very small screens (375px), ensure good touch targets
-      // For very large screens, make buttons bigger with proper proportions
-      const getButtonSize = () => {
-        if (!isBrowser) return 45 // fallback when rendering on the server
-        const screenWidth = window.innerWidth
-
-        if (screenWidth <= 375) {
-          return Math.min(screenWidth * 0.08, 35)
-        } else if (screenWidth >= 1920) {
-          return Math.min(screenWidth * 0.035, 65)
-        } else if (isMobile) {
-          return Math.min(screenWidth * 0.09, 50)
-        } else {
-          const isOuterCircle = keys === camelotKeysMajor
-          return isOuterCircle ? Math.min(screenWidth * 0.04, 55) : Math.min(screenWidth * 0.03, 45)
-        }
-      }
-
-      const buttonSize = getButtonSize()
+      // Calculate text position (middle of wedge)
+      const midAngle = (startAngle + endAngle) / 2
+      const midRad = (midAngle * Math.PI) / 180
+      const textRadius = (innerRadius + outerRadius) / 2
+      const textX = textRadius * Math.cos(midRad)
+      const textY = textRadius * Math.sin(midRad)
 
       return (
-        <Button
-          key={key}
-          onClick={() => handleKeySelect(key)}
-          style={{
-            position: "absolute",
-            left: `calc(50% + ${x}px)`,
-            top: `calc(50% + ${y}px)`,
-            transform: "translate(-50%, -50%)",
-            backgroundColor: isSelected ? data.color : `${data.color}60`,
-            boxShadow: isSelected ? `0 0 15px ${data.color}60` : undefined,
-            zIndex: isSelected ? 10 : 1,
-            width: `${buttonSize}px`,
-            height: `${buttonSize}px`,
-          }}
-          className={`rounded-full text-xs font-bold border-2 transition-all duration-200 ${
-            isSelected
-              ? "border-white text-white scale-110 shadow-lg"
-              : "border-white/30 text-white hover:border-white/60 hover:scale-105 hover:shadow-md"
-          }`}
-        >
-          <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-xs">{key}</span>
-            <span className="opacity-70 text-[8px]">{data.musicalKey}</span>
-          </div>
-        </Button>
+        <g key={key}>
+          <path
+            d={pathData}
+            fill={isSelected ? data.color : `${data.color}60`}
+            stroke={isSelected ? "#ffffff" : "#ffffff30"}
+            strokeWidth={isSelected ? "3" : "1"}
+            className="cursor-pointer transition-all duration-200 hover:stroke-white/60"
+            style={{
+              filter: isSelected ? `drop-shadow(0 0 10px ${data.color}60)` : undefined,
+              pointerEvents: "all",
+            }}
+            onClick={() => handleKeySelect(key)}
+            onMouseEnter={(e) => {
+              if (!isSelected) {
+                e.currentTarget.setAttribute("fill", `${data.color}80`)
+                e.currentTarget.setAttribute("stroke", "#ffffff60")
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isSelected) {
+                e.currentTarget.setAttribute("fill", `${data.color}60`)
+                e.currentTarget.setAttribute("stroke", "#ffffff30")
+              }
+            }}
+          />
+          <text
+            x={textX}
+            y={textY}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="pointer-events-none select-none font-black"
+            fontSize={isMobile ? "16" : "16"}
+            fill="#ffffff"
+            stroke="#000000"
+            strokeWidth="0.5"
+          >
+            <tspan x={textX} dy="-0.3em" fontSize={isMobile ? "15" : "15"} fontWeight="900">
+              {key}
+            </tspan>
+            <tspan x={textX} dy="1.2em" fontSize={isMobile ? "11" : "12"} fontWeight="700">
+              {data.musicalKey}
+            </tspan>
+          </text>
+        </g>
       )
     })
   }
@@ -534,9 +584,9 @@ export default function DJHarmonicMatcher() {
   const SelectionScreen = () => (
     <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
       <CardHeader className="pb-4 flex-shrink-0">
-        <CardTitle className="text-white text-base">Select Key & BPM</CardTitle>
+        <CardTitle className="text-white text-base">Select Key & BMP</CardTitle>
         <CardDescription className="text-gray-300 text-xs">
-          Click on any key button to select it, adjust BPM in the center
+          Click on any key button to select it, adjust BMP in the center
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-4">
@@ -544,23 +594,39 @@ export default function DJHarmonicMatcher() {
           <div
             className="relative flex items-center justify-center"
             style={{
-              width: isMobile ? "min(85vw, 85vh, 350px)" : "min(60vw, 60vh, 600px)",
-              height: isMobile ? "min(85vw, 85vh, 350px)" : "min(60vw, 60vh, 600px)",
+              width: "100%",
+              height: "100%",
+              minWidth: isMobile ? "500px" : "750px", // Increased from 400px to 500px and 600px to 750px
+              minHeight: isMobile ? "500px" : "750px", // Increased from 400px to 500px and 600px to 750px
             }}
           >
-            {/* Major keys outer ring */}
-            {createKeyButtons(camelotKeysMajor, getRadius(true))}
+            {/* SVG Wheel */}
+            <svg
+              width="100%"
+              height="100%"
+              viewBox={isMobile ? "-350 -350 700 700" : "-450 -450 900 900"}
+              className="absolute inset-0"
+              style={{ pointerEvents: "all" }}
+            >
+              {/* Major keys outer ring */}
+              {createWedgePaths(
+                camelotKeysMajor,
+                getRadius("inner") + (isMobile ? 125 : 100), // Updated to match new ring thickness
+                getRadius("outer") + (isMobile ? 125 : 100),
+              )}
 
-            {/* Minor keys inner ring */}
-            {createKeyButtons(camelotKeysMinor, getRadius(false))}
+              {/* Minor keys inner ring */}
+              {createWedgePaths(camelotKeysMinor, getRadius("inner"), getRadius("inner") + (isMobile ? 125 : 100))}
+            </svg>
 
-            {/* BPM selector at center */}
-            <div className="absolute inset-0 flex items-center justify-center">
+            {/* BMP selector at center */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
-                className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none"
+                className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none pointer-events-auto"
                 style={{
                   width: "140px",
                   height: "140px",
+                  zIndex: 20,
                 }}
               >
                 <div className="flex flex-col items-center justify-center h-full px-0 py-0">
@@ -593,7 +659,7 @@ export default function DJHarmonicMatcher() {
                       className="w-full"
                     />
                   </div>
-                  <span className="text-white/70 font-medium text-xs">BPM</span>
+                  <span className="text-white/70 font-medium text-xs">BMP</span>
                 </div>
               </div>
             </div>
@@ -829,22 +895,6 @@ export default function DJHarmonicMatcher() {
       </CardContent>
     </Card>
   )
-
-  // Calculate radius with better proportions for large screens
-  const getRadius = (isOuter: boolean) => {
-    // Provide safe defaults during static prerender
-    const width = isBrowser ? window.innerWidth : 1280
-    const height = isBrowser ? window.innerHeight : 720
-
-    const containerSize = isMobile
-      ? Math.min(width * 0.85, height * 0.85, 350)
-      : Math.min(width * 0.6, height * 0.6, 600)
-
-    if (width >= 1920) {
-      return containerSize * (isOuter ? 0.45 : 0.25)
-    }
-    return containerSize * (isOuter ? 0.42 : 0.27)
-  }
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden flex flex-col">
