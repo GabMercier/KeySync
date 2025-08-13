@@ -1,11 +1,333 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Slider } from "@/components/ui/slider"
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, ChevronUp, ChevronDown } from "lucide-react"
+
+interface BPMPickerProps {
+  isOpen: boolean
+  currentBpm: number
+  onClose: () => void
+  onSelect: (bpm: number) => void
+}
+
+const BPMPicker: React.FC<BPMPickerProps> = ({ isOpen, currentBpm, onClose, onSelect }) => {
+  const [selectedBpm, setSelectedBpm] = useState(currentBpm)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStartY, setDragStartY] = useState(0)
+  const [dragStartOffset, setDragStartOffset] = useState(0)
+  const [scrollOffset, setScrollOffset] = useState(0)
+  const [momentum, setMomentum] = useState(0)
+  const [velocityTracker, setVelocityTracker] = useState<Array<{ time: number; y: number }>>([])
+  const containerRef = useRef<HTMLDivElement>(null)
+  const animationRef = useRef<number>()
+
+  // Use ref to track current scroll position for immediate access
+  const currentScrollOffset = useRef(0)
+
+  const minBpm = 60
+  const maxBpm = 200
+  const itemHeight = 60
+  const visibleItems = 5
+
+  // Generate BPM array
+  const bpmArray = Array.from({ length: maxBpm - minBpm + 1 }, (_, i) => minBpm + i)
+
+  // Calculate initial scroll position
+  useEffect(() => {
+    if (isOpen) {
+      const initialIndex = currentBpm - minBpm
+      const initialOffset = initialIndex * itemHeight
+      setScrollOffset(initialOffset)
+      currentScrollOffset.current = initialOffset
+      setSelectedBpm(currentBpm)
+    }
+  }, [isOpen, currentBpm])
+
+  // Update both state and ref when scroll offset changes
+  const updateScrollOffset = (newOffset: number) => {
+    const clampedOffset = Math.max(0, Math.min(newOffset, (bpmArray.length - 1) * itemHeight))
+    setScrollOffset(clampedOffset)
+    currentScrollOffset.current = clampedOffset
+    return clampedOffset
+  }
+
+  // Snap to nearest item and update selected BPM - ALWAYS snap to exact positions
+  const snapToNearest = (offset: number) => {
+    const clampedOffset = Math.max(0, Math.min(offset, (bpmArray.length - 1) * itemHeight))
+    const nearestIndex = Math.round(clampedOffset / itemHeight)
+    const finalIndex = Math.max(0, Math.min(nearestIndex, bpmArray.length - 1))
+    const snappedOffset = finalIndex * itemHeight // ALWAYS exact multiple of itemHeight
+    const newBpm = minBpm + finalIndex
+
+    const finalOffset = updateScrollOffset(snappedOffset)
+    setSelectedBpm(newBpm)
+    return finalOffset
+  }
+
+  // Update selected BPM based on current offset - ALWAYS from snapped position
+  const updateSelectedBpm = (offset: number) => {
+    const clampedOffset = Math.max(0, Math.min(offset, (bpmArray.length - 1) * itemHeight))
+    const nearestIndex = Math.round(clampedOffset / itemHeight)
+    const finalIndex = Math.max(0, Math.min(nearestIndex, bpmArray.length - 1))
+    const newBpm = minBpm + finalIndex
+    setSelectedBpm(newBpm)
+  }
+
+  // Handle momentum scrolling
+  useEffect(() => {
+    if (momentum !== 0 && !isDragging) {
+      const animate = () => {
+        const newOffset = currentScrollOffset.current + momentum
+        const clampedOffset = updateScrollOffset(newOffset)
+
+        // Update selected BPM during momentum
+        updateSelectedBpm(clampedOffset)
+
+        // Apply friction
+        setMomentum((prev) => {
+          const newMomentum = prev * 0.88
+          return Math.abs(newMomentum) < 0.5 ? 0 : newMomentum
+        })
+
+        if (Math.abs(momentum) > 0.5) {
+          animationRef.current = requestAnimationFrame(animate)
+        } else {
+          // Final snap when momentum stops
+          snapToNearest(currentScrollOffset.current)
+        }
+      }
+      animationRef.current = requestAnimationFrame(animate)
+    }
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+      }
+    }
+  }, [momentum, isDragging, bpmArray.length])
+
+  // Touch/Mouse handlers - FIXED drag logic
+  const handleStart = (clientY: number) => {
+    setIsDragging(true)
+    setDragStartY(clientY)
+    setDragStartOffset(currentScrollOffset.current) // Use current ref value
+    setMomentum(0)
+    setVelocityTracker([{ time: Date.now(), y: clientY }])
+
+    // Cancel any ongoing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current)
+    }
+  }
+
+  const handleMove = (clientY: number) => {
+    if (!isDragging) return
+
+    const currentTime = Date.now()
+
+    // Calculate total movement from drag start (not delta)
+    const totalDragDistance = dragStartY - clientY
+    const newOffset = dragStartOffset + totalDragDistance
+
+    // Update velocity tracker
+    setVelocityTracker((prev) => {
+      const newTracker = [...prev, { time: currentTime, y: clientY }].slice(-5)
+      return newTracker
+    })
+
+    // Update scroll position immediately
+    const clampedOffset = updateScrollOffset(newOffset)
+
+    // Update selected BPM during drag
+    updateSelectedBpm(clampedOffset)
+  }
+
+  const handleEnd = () => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    // Use the current ref value for final position
+    const finalOffset = currentScrollOffset.current
+
+    // Calculate velocity from recent movements for momentum
+    if (velocityTracker.length >= 2) {
+      const recent = velocityTracker.slice(-3)
+      const timeDiff = recent[recent.length - 1].time - recent[0].time
+      const distanceDiff = recent[0].y - recent[recent.length - 1].y
+
+      if (timeDiff > 0 && timeDiff < 150 && Math.abs(distanceDiff) > 15) {
+        const velocity = distanceDiff / timeDiff
+        const calculatedMomentum = Math.max(-20, Math.min(20, velocity * 10))
+        setMomentum(calculatedMomentum)
+      } else {
+        // No momentum, just snap to nearest from current position
+        snapToNearest(finalOffset)
+      }
+    } else {
+      // No movement data, just snap from current position
+      snapToNearest(finalOffset)
+    }
+
+    setVelocityTracker([])
+  }
+
+  // Keyboard handler
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault()
+        if (selectedBpm > minBpm) {
+          const newBpm = selectedBpm - 1
+          const newOffset = (newBpm - minBpm) * itemHeight
+          setSelectedBpm(newBpm)
+          setScrollOffset(newOffset)
+        }
+        break
+      case "ArrowDown":
+        e.preventDefault()
+        if (selectedBpm < maxBpm) {
+          const newBpm = selectedBpm + 1
+          const newOffset = (newBpm - minBpm) * itemHeight
+          setSelectedBpm(newBpm)
+          setScrollOffset(newOffset)
+        }
+        break
+      case "Enter":
+        onSelect(selectedBpm)
+        onClose()
+        break
+      case "Escape":
+        onClose()
+        break
+    }
+  }
+
+  const handleConfirm = () => {
+    onSelect(selectedBpm)
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 bg-gray-900/95 backdrop-blur-md z-50 flex items-center justify-center p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="bg-gray-800/95 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl flex flex-col"
+        style={{
+          width: "320px",
+          height: "500px",
+        }}
+      >
+        {/* Header */}
+        <div className="text-center py-6 flex-shrink-0">
+          <h3 className="text-white text-xl font-semibold">Select BPM</h3>
+        </div>
+
+        {/* Picker Container */}
+        <div className="flex-1 flex items-center justify-center px-8">
+          <div
+            ref={containerRef}
+            className="relative overflow-hidden rounded-2xl bg-gray-900/50 border border-white/10 w-full"
+            style={{ height: `${visibleItems * itemHeight}px` }}
+            onTouchStart={(e) => handleStart(e.touches[0].clientY)}
+            onTouchMove={(e) => handleMove(e.touches[0].clientY)}
+            onTouchEnd={handleEnd}
+            onMouseDown={(e) => handleStart(e.clientY)}
+            onMouseMove={(e) => e.buttons === 1 && handleMove(e.clientY)}
+            onMouseUp={handleEnd}
+            onMouseLeave={handleEnd}
+            onKeyDown={handleKeyDown}
+            tabIndex={0}
+          >
+            {/* Selection indicator */}
+            <div
+              className="absolute left-4 right-4 border-t-2 border-b-2 border-white/40 bg-white/10 pointer-events-none z-10 rounded-lg"
+              style={{
+                top: `${((visibleItems - 1) / 2) * itemHeight}px`,
+                height: `${itemHeight}px`,
+              }}
+            />
+
+            {/* Fade gradients */}
+            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-gray-900/50 to-transparent pointer-events-none z-20" />
+            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gray-900/50 to-transparent pointer-events-none z-20" />
+
+            {/* BPM items */}
+            <div
+              className="relative"
+              style={{
+                transform: `translateY(${((visibleItems - 1) / 2) * itemHeight - scrollOffset}px)`,
+                transition: isDragging ? "none" : "transform 0.2s ease-out",
+              }}
+            >
+              {bpmArray.map((bpm, index) => {
+                const itemPosition = index * itemHeight
+                const containerCenter = scrollOffset
+                const distance = Math.abs(itemPosition - containerCenter)
+                const maxDistance = itemHeight * 2
+                const opacity = Math.max(0.3, 1 - distance / maxDistance)
+                const scale = Math.max(0.85, 1 - (distance / maxDistance) * 0.2)
+
+                // Check if this is the selected/centered item - use exact comparison
+                const isSelected = Math.round(containerCenter / itemHeight) === index
+
+                return (
+                  <div
+                    key={bpm}
+                    className={`flex items-center justify-center text-white font-bold cursor-pointer select-none ${
+                      isSelected ? "text-white" : "text-gray-300"
+                    }`}
+                    style={{
+                      height: `${itemHeight}px`,
+                      opacity,
+                      transform: `scale(${scale})`,
+                      fontSize: isSelected ? "32px" : "24px",
+                      fontWeight: isSelected ? "900" : "600",
+                      textShadow: isSelected ? "0 0 8px rgba(255,255,255,0.3)" : "none",
+                      transition: isDragging ? "none" : "all 0.2s ease-out",
+                    }}
+                    onClick={() => {
+                      const targetOffset = index * itemHeight
+                      setScrollOffset(targetOffset)
+                      setSelectedBpm(bpm)
+                    }}
+                  >
+                    {bpm}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-4 p-6 flex-shrink-0">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="flex-1 text-white border border-white/30 hover:bg-white/10 bg-transparent"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            className="flex-1 bg-white/20 text-white hover:bg-white/30 border border-white/20"
+          >
+            Confirm
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const camelotKeysMinor = ["12A", "1A", "2A", "3A", "4A", "5A", "6A", "7A", "8A", "9A", "10A", "11A"]
 
@@ -133,6 +455,7 @@ export default function DJHarmonicMatcher() {
   const [activeTab, setActiveTab] = useState("perfect")
   const [mobileScreen, setMobileScreen] = useState<"selection" | "results">("selection")
   const [showControls, setShowControls] = useState(false)
+  const [showBpmPicker, setShowBpmPicker] = useState(false)
 
   // Check if mobile
   const [isMobile, setIsMobile] = useState(false)
@@ -622,47 +945,29 @@ export default function DJHarmonicMatcher() {
             {/* BMP selector at center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
-                className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none pointer-events-auto"
+                className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none pointer-events-auto cursor-pointer hover:bg-white/10 transition-colors"
                 style={{
                   width: "140px",
                   height: "140px",
                   zIndex: 20,
                 }}
+                onClick={() => setShowBpmPicker(true)}
               >
                 <div className="flex flex-col items-center justify-center h-full px-0 py-0">
-                  <div className="flex items-center gap-1 mb-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => adjustBpm(-1)}
-                      className="text-white hover:bg-white/10 w-5 h-5"
-                    >
-                      <Minus className="w-2 h-2" />
-                    </Button>
-                    <span className="text-white font-bold tabular-nums text-xl">{bpm}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => adjustBpm(1)}
-                      className="text-white hover:bg-white/10 w-5 h-5"
-                    >
-                      <Plus className="w-2 h-2" />
-                    </Button>
-                  </div>
-                  <div className="w-full px-1 mb-1" onDoubleClick={handleSliderDoubleClick}>
-                    <Slider
-                      value={[bpm]}
-                      onValueChange={(value) => handleBpmChange(value[0])}
-                      max={200}
-                      min={60}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-                  <span className="text-white/70 font-medium text-xs">BMP</span>
+                  <span className="text-white font-bold tabular-nums text-3xl">{bpm}</span>
+                  <span className="text-white/70 font-medium text-sm">BPM</span>
+                  <span className="text-white/50 font-medium text-xs mt-1">tap to edit</span>
                 </div>
               </div>
             </div>
+
+            {/* BPM Picker Modal */}
+            <BPMPicker
+              isOpen={showBpmPicker}
+              currentBpm={bpm}
+              onClose={() => setShowBpmPicker(false)}
+              onSelect={handleBpmChange}
+            />
           </div>
         </div>
       </CardContent>
