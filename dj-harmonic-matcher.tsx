@@ -907,9 +907,9 @@ export default function DJHarmonicMatcher() {
   const SelectionScreen = () => (
     <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
       <CardHeader className="pb-4 flex-shrink-0">
-        <CardTitle className="text-white text-base">Select Key & BMP</CardTitle>
+        <CardTitle className="text-white text-base">Select Key & BPM</CardTitle>
         <CardDescription className="text-gray-300 text-xs">
-          Click on any key button to select it, adjust BMP in the center
+          Click on any key button to select it, adjust BPM in the center
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-4">
@@ -919,8 +919,10 @@ export default function DJHarmonicMatcher() {
             style={{
               width: "100%",
               height: "100%",
-              minWidth: isMobile ? "500px" : "750px", // Increased from 400px to 500px and 600px to 750px
-              minHeight: isMobile ? "500px" : "750px", // Increased from 400px to 500px and 600px to 750px
+              minWidth: isMobile ? undefined : "750px",
+              minHeight: isMobile ? undefined : "750px",
+              maxWidth: isMobile ? "500px" : undefined,
+              maxHeight: isMobile ? "500px" : undefined,
             }}
           >
             {/* SVG Wheel */}
