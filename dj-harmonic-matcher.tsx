@@ -708,8 +708,11 @@ export default function DJHarmonicMatcher() {
 
   // Calculate radius with much larger proportions to fill available space
   const getRadius = (ringType: "bpm" | "inner" | "outer") => {
-    const bpmRadius = 70 // BPM selector is 140px diameter = 70px radius
-    const ringThickness = isMobile ? 125 : 80
+    // The center BPM button is a fixed 140px (70px radius). On mobile the wheel renders
+    // at a smaller pixel size, so we push the inner ring further out in viewBox units
+    // to keep it clear of the BPM button.
+    const bpmRadius = isMobile ? 120 : 70
+    const ringThickness = isMobile ? 100 : 80
     const gap = 10
 
     switch (ringType) {
@@ -909,7 +912,7 @@ export default function DJHarmonicMatcher() {
           Click on any key button to select it, adjust BPM in the center
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-1 sm:p-4">
+      <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center px-0 py-1 sm:p-4">
         <div className="w-full h-full flex items-center justify-center">
           <div
             className="relative flex items-center justify-center"
@@ -933,12 +936,12 @@ export default function DJHarmonicMatcher() {
               {/* Major keys outer ring */}
               {createWedgePaths(
                 camelotKeysMajor,
-                getRadius("inner") + (isMobile ? 125 : 100), // Updated to match new ring thickness
-                getRadius("outer") + (isMobile ? 125 : 100),
+                getRadius("inner") + 100,
+                getRadius("outer") + 100,
               )}
 
               {/* Minor keys inner ring */}
-              {createWedgePaths(camelotKeysMinor, getRadius("inner"), getRadius("inner") + (isMobile ? 125 : 100))}
+              {createWedgePaths(camelotKeysMinor, getRadius("inner"), getRadius("inner") + 100)}
             </svg>
 
             {/* BPM selector at center */}
