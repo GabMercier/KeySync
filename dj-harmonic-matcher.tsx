@@ -903,13 +903,13 @@ export default function DJHarmonicMatcher() {
 
   const SelectionScreen = () => (
     <Card className="bg-white/5 backdrop-blur-sm border-white/10 h-full flex flex-col">
-      <CardHeader className="pb-4 flex-shrink-0">
+      <CardHeader className="p-3 sm:p-6 pb-3 sm:pb-4 flex-shrink-0">
         <CardTitle className="text-white text-base">Select Key & BPM</CardTitle>
         <CardDescription className="text-gray-300 text-xs">
           Click on any key button to select it, adjust BPM in the center
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-4">
+      <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center p-1 sm:p-4">
         <div className="w-full h-full flex items-center justify-center">
           <div
             className="relative flex items-center justify-center"
