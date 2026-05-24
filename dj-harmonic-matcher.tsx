@@ -80,29 +80,31 @@ const BPMPicker: React.FC<BPMPickerProps> = ({ isOpen, currentBpm, onClose, onSe
 
   // Handle momentum scrolling
   useEffect(() => {
-    if (momentum !== 0 && !isDragging) {
-      const animate = () => {
-        const newOffset = currentScrollOffset.current + momentum
-        const clampedOffset = updateScrollOffset(newOffset)
+    if (isDragging) return
 
-        // Update selected BPM during momentum
-        updateSelectedBpm(clampedOffset)
-
-        // Apply friction
-        setMomentum((prev) => {
-          const newMomentum = prev * 0.88
-          return Math.abs(newMomentum) < 0.5 ? 0 : newMomentum
-        })
-
-        if (Math.abs(momentum) > 0.5) {
-          animationRef.current = requestAnimationFrame(animate)
-        } else {
-          // Final snap when momentum stops
-          snapToNearest(currentScrollOffset.current)
-        }
+    // Momentum has decayed (or never started) — make sure we land on an exact item.
+    if (momentum === 0) {
+      const snapped = Math.round(currentScrollOffset.current / itemHeight) * itemHeight
+      if (Math.abs(currentScrollOffset.current - snapped) > 0.01) {
+        snapToNearest(currentScrollOffset.current)
       }
-      animationRef.current = requestAnimationFrame(animate)
+      return
     }
+
+    // One animation frame: advance by current momentum, then let React re-run this
+    // effect with the decayed momentum value for the next frame.
+    const animate = () => {
+      const newOffset = currentScrollOffset.current + momentum
+      const clampedOffset = updateScrollOffset(newOffset)
+      updateSelectedBpm(clampedOffset)
+
+      setMomentum((prev) => {
+        const newMomentum = prev * 0.92
+        return Math.abs(newMomentum) < 0.2 ? 0 : newMomentum
+      })
+    }
+
+    animationRef.current = requestAnimationFrame(animate)
 
     return () => {
       if (animationRef.current) {
