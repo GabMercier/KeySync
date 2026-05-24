@@ -673,7 +673,6 @@ export default function DJHarmonicMatcher() {
   }
 
   const handleKeySelect = (key: string) => {
-    console.log("Key selected:", key)
     setSelectedKey(key)
     if (key && bpm) {
       const result = generateMatches(key, bpm)
@@ -708,22 +707,20 @@ export default function DJHarmonicMatcher() {
   }
 
   // Calculate radius with much larger proportions to fill available space
-  const getRadius = (ringType: "bmp" | "inner" | "outer") => {
-    const bmpRadius = 70 // BMP selector is 140px diameter = 70px radius
-    const ringThickness = isMobile ? 125 : 80 // Much thicker rings for mobile (increased from 100 to 125)
-    const gap = 10 // Small gap between rings
+  const getRadius = (ringType: "bpm" | "inner" | "outer") => {
+    const bpmRadius = 70 // BPM selector is 140px diameter = 70px radius
+    const ringThickness = isMobile ? 125 : 80
+    const gap = 10
 
     switch (ringType) {
-      case "bmp":
-        return bmpRadius
+      case "bpm":
+        return bpmRadius
       case "inner":
-        // Inner ring starts just outside BMP selector
-        return bmpRadius + gap
+        return bpmRadius + gap
       case "outer":
-        // Outer ring starts after inner ring
-        return bmpRadius + gap + ringThickness + gap
+        return bpmRadius + gap + ringThickness + gap
       default:
-        return bmpRadius
+        return bpmRadius
     }
   }
 
@@ -944,7 +941,7 @@ export default function DJHarmonicMatcher() {
               {createWedgePaths(camelotKeysMinor, getRadius("inner"), getRadius("inner") + (isMobile ? 125 : 100))}
             </svg>
 
-            {/* BMP selector at center */}
+            {/* BPM selector at center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
                 className="rounded-full p-3 mx-[px] my-[px] py-3 border-[12px] opacity-100 border-none shadow-none pointer-events-auto cursor-pointer hover:bg-white/10 transition-colors"
