@@ -235,7 +235,7 @@ const BPMPicker: React.FC<BPMPickerProps> = ({ isOpen, currentBpm, onClose, onSe
         <div className="flex-1 flex items-center justify-center px-8">
           <div
             ref={containerRef}
-            className="relative overflow-hidden rounded-2xl bg-gray-900/50 border border-white/10 w-full"
+            className="relative overflow-hidden rounded-2xl bg-gray-900/50 border border-white/10 w-full touch-none"
             style={{ height: `${visibleItems * itemHeight}px` }}
             onTouchStart={(e) => handleStart(e.touches[0].clientY)}
             onTouchMove={(e) => handleMove(e.touches[0].clientY)}
